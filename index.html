@@ -1,0 +1,396 @@
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PT Nova Sejahtera - Enterprise Management & Attendance System</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html2pdf.js for direct PDF downloads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        nova: {
+                            50: '#f0f6ff',
+                            100: '#e0eefd',
+                            500: '#0284c7',
+                            600: '#026aa2',
+                            700: '#035380',
+                            800: '#074164',
+                            900: '#0b324d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 flex flex-col antialiased">
+
+    <!-- Toast Notification Banner -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="app" class="flex-1 flex flex-col">
+        <!-- RENDERED DYNAMICALLY VIA JS -->
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Users Database
+        const USERS_DB = [
+            { id: 'EMP-001', name: 'Fendi Ahmad', username: 'fendi005', password: 'fendi567', role: 'Karyawan', profilePic: '' },
+            { id: 'EMP-002', name: 'Bagus Adi', username: 'bagusadi456', password: 'bagusbagus23', role: 'Karyawan', profilePic: '' },
+            { id: 'SPV-001', name: 'Nanda Pratama', username: 'nandaspv45', password: 'nanda@23', role: 'Supervisor', profilePic: '' },
+            { id: 'MGR-001', name: 'Irfan Maulana', username: 'irfan357', password: 'irfan_4', role: 'Manager', profilePic: '' },
+            { id: 'CTR-001', name: 'Pusat Admin', username: 'center1', password: '@@234pusat', role: 'Pusat', profilePic: '' }
+        ];
+
+        // App State
+        let currentUser = JSON.parse(localStorage.getItem('ns_current_user')) || null;
+        let attendanceLogs = JSON.parse(localStorage.getItem('ns_attendance')) || [];
+        let leaveRequests = JSON.parse(localStorage.getItem('ns_leaves')) || [
+            { id: 1, username: 'fendi005', name: 'Fendi Ahmad', role: 'Karyawan', startDate: '2026-03-01', endDate: '2026-03-03', reason: 'Keperluan keluarga mendesak', status: 'Disetujui', submittedDate: '2026-02-24' },
+            { id: 2, username: 'bagusadi456', name: 'Bagus Adi', role: 'Karyawan', startDate: '2026-03-10', endDate: '2026-03-12', reason: 'Acara pernikahan saudara', status: 'Sedang ditinjau Pusat', submittedDate: '2026-02-25' }
+        ];
+        let performanceReports = JSON.parse(localStorage.getItem('ns_reports')) || [];
+        let penalties = JSON.parse(localStorage.getItem('ns_penalties')) || [];
+
+        // Save state helper
+        function saveAppData() {
+            localStorage.setItem('ns_users', JSON.stringify(USERS_DB));
+            localStorage.setItem('ns_attendance', JSON.stringify(attendanceLogs));
+            localStorage.setItem('ns_leaves', JSON.stringify(leaveRequests));
+            localStorage.setItem('ns_reports', JSON.stringify(performanceReports));
+            localStorage.setItem('ns_penalties', JSON.stringify(penalties));
+            if (currentUser) {
+                localStorage.setItem('ns_current_user', JSON.stringify(currentUser));
+            } else {
+                localStorage.removeItem('ns_current_user');
+            }
+        }
+
+        // DOM Loaded
+        window.addEventListener('DOMContentLoaded', () => {
+            renderApp();
+        });
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto px-4 py-3 rounded-xl shadow-lg text-white text-xs font-semibold flex items-center gap-2 transition transform translate-y-2 opacity-0 ${type === 'error' ? 'bg-rose-600' : 'bg-emerald-600'}`;
+            toast.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'} text-sm"></i> ${message}`;
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+            setTimeout(() => {
+                toast.classList.add('translate-y-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function renderApp() {
+            const app = document.getElementById('app');
+            if (!currentUser) {
+                app.innerHTML = renderLoginView();
+            } else {
+                app.innerHTML = renderMainDashboardView();
+                renderDashboard();
+            }
+        }
+        // Login View with Deep Black Background, Watermark Layer, and Glassmorphism Card
+        function renderLoginView() {
+            return `
+                <div class="flex-1 flex items-center justify-center p-4 relative overflow-hidden bg-black min-h-screen">
+                    <!-- Subtle Watermark Background Logo with low opacity -->
+                    <div class="absolute inset-0 opacity-15 flex items-center justify-center pointer-events-none">
+                        <img src="102577.jpg" class="w-[700px] h-[700px] object-contain filter blur-sm">
+                    </div>
+
+                    <!-- Login Card with Advanced Glassmorphism Styling -->
+                    <div class="relative z-10 w-full max-w-md bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10 p-8 space-y-6 text-white">
+                        <div class="text-center space-y-3">
+                            <div class="w-20 h-20 mx-auto rounded-2xl overflow-hidden shadow-lg border border-white/20 bg-neutral-900 p-1">
+                                <img src="102577.jpg" alt="Logo PT Nova Sejahtera" class="w-full h-full object-cover rounded-xl" onerror="this.src='https://placehold.co/100x100/0284c7/ffffff?text=NS'">
+                            </div>
+                            <h1 class="text-xl font-extrabold text-white tracking-tight">PT NOVA SEJAHTERA</h1>
+                            <p class="text-xs text-slate-300 font-medium">Enterprise Management & Attendance System</p>
+                        </div>
+
+                        <form onsubmit="handleLogin(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-200 mb-1.5">Username</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-user text-xs"></i></span>
+                                    <input type="text" id="login-username" required placeholder="Masukkan username..." class="w-full pl-10 pr-4 py-3 bg-black/40 border border-white/15 rounded-xl text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-nova-500">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-200 mb-1.5">Password</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-lock text-xs"></i></span>
+                                    <input type="password" id="login-password" required placeholder="Masukkan password..." class="w-full pl-10 pr-4 py-3 bg-black/40 border border-white/15 rounded-xl text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-nova-500">
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-nova-600 hover:bg-nova-700 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-nova-600/30 transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-right-to-bracket"></i> Masuk Sistem
+                            </button>
+                        </form>
+
+                        <div class="bg-black/50 rounded-2xl p-4 border border-white/10 text-xs space-y-2">
+                            <p class="font-bold text-slate-200">Akun Demo Akses Cepat:</p>
+                            <div class="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
+                                <div>• Karyawan: <span class="font-mono text-white">fendi005</span></div>
+                                <div>• SPV: <span class="font-mono text-white">nandaspv45</span></div>
+                                <div>• Manager: <span class="font-mono text-white">irfan357</span></div>
+                                <div>• Pusat: <span class="font-mono text-white">center1</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('login-username').value.trim();
+            const p = document.getElementById('login-password').value.trim();
+
+            const found = USERS_DB.find(x => x.username === u && x.password === p);
+            if (found) {
+                currentUser = found;
+                saveAppData();
+                showToast(`Selamat datang kembali, ${found.name}!`);
+                renderApp();
+            } else {
+                showToast('Username atau password salah!', 'error');
+            }
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            saveAppData();
+            showToast('Anda telah keluar sesi.');
+            renderApp();
+        }
+
+        // Main Dashboard View Shell
+        function renderMainDashboardView() {
+            return `
+                <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+                        <!-- Branding & Logo -->
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-white p-0.5 flex-shrink-0" style="max-width: 220px;">
+                                <img src="102577.jpg" alt="Logo PT Nova Sejahtera" class="w-full h-full object-cover rounded-xl" onerror="this.src='https://placehold.co/100x100/0284c7/ffffff?text=NS'">
+                            </div>
+                            <div>
+                                <h1 class="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight">PT NOVA SEJAHTERA</h1>
+                                <p class="text-xs text-slate-500 font-medium">Portal Karyawan & Manajemen Operasional</p>
+                            </div>
+                        </div>
+        // Attendance Actions with GPS Geofencing Validation
+        const OFFICE_LOCATIONS = [
+            { name: "Kantor Pusat 1", lat: -7.5366300, lng: 110.8405109 },
+            { name: "Kantor Cabang 2", lat: -7.5576044, lng: 110.8189309 },
+            { name: "Kantor Cabang 3", lat: -7.5403823, lng: 110.8213019 }
+        ];
+
+        function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Earth radius in meters
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c; // Distance in meters
+        }
+
+        function verifyGeofenceAndExecute(actionType) {
+            if (!navigator.geolocation) {
+                showToast('Browser Anda tidak mendukung geolokasi GPS.', 'error');
+                return;
+            }
+
+            showToast('Mengambil lokasi GPS perangkat Anda...');
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const userLat = position.coords.latitude;
+                    const userLng = position.coords.longitude;
+
+                    let isWithinAnyOffice = false;
+                    let closestDistance = Infinity;
+
+                    for (const office of OFFICE_LOCATIONS) {
+                        const distance = calculateHaversineDistance(userLat, userLng, office.lat, office.lng);
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                        }
+                        if (distance <= 100) {
+                            isWithinAnyOffice = true;
+                            break;
+                        }
+                    }
+
+                    if (isWithinAnyOffice) {
+                        if (actionType === 'in') executeCheckIn();
+                        else executeCheckOut();
+                    } else {
+                        showToast(`Gagal: Anda berada di luar radius 100 meter dari titik kantor yang diizinkan. (Jarak terdekat: ${Math.round(closestDistance)}m)`, 'error');
+                    }
+                },
+                (error) => {
+                    console.error(error);
+                    showToast('Gagal mendapatkan lokasi GPS. Pastikan izin lokasi aktif.', 'error');
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+
+        function handleCheckIn() {
+            verifyGeofenceAndExecute('in');
+        }
+
+        function handleCheckOut() {
+            verifyGeofenceAndExecute('out');
+        }
+
+        function executeCheckIn() {
+            const today = new Date().toISOString().split('T')[0];
+            const timeNow = new Date().toLocaleTimeString('id-ID');
+            const existing = attendanceLogs.find(l => l.username === currentUser.username && l.date === today);
+
+            if (existing && existing.checkIn) {
+                showToast('Anda sudah melakukan Check In hari ini!', 'error');
+                return;
+            }
+
+            if (existing) {
+                existing.checkIn = timeNow;
+            } else {
+                attendanceLogs.push({
+                    id: Date.now(),
+                    username: currentUser.username,
+                    name: currentUser.name,
+                    role: currentUser.role,
+                    date: today,
+                    checkIn: timeNow,
+                    checkOut: '-'
+                });
+            }
+            saveAppData();
+            showToast(`Check In berhasil pada pukul ${timeNow} (Dalam radius 100m kantor)`);
+            renderDashboard();
+        }
+
+        function executeCheckOut() {
+            const today = new Date().toISOString().split('T')[0];
+            const timeNow = new Date().toLocaleTimeString('id-ID');
+            const existing = attendanceLogs.find(l => l.username === currentUser.username && l.date === today);
+
+            if (!existing || !existing.checkIn) {
+                showToast('Anda belum melakukan Check In hari ini!', 'error');
+                return;
+            }
+
+            existing.checkOut = timeNow;
+            saveAppData();
+            showToast(`Check Out berhasil pada pukul ${timeNow} (Dalam radius 100m kantor)`);
+            renderDashboard();
+        }
+
+        function checkTodayAttendanceStatus() {
+            const today = new Date().toISOString().split('T')[0];
+            const existing = attendanceLogs.find(l => l.username === currentUser.username && l.date === today);
+            const statusEl = document.getElementById('today-attendance-status');
+            if (!statusEl) return;
+
+            if (!existing || !existing.checkIn) {
+                statusEl.innerHTML = '<span class="text-amber-600 font-semibold">Belum Absen</span>';
+            } else if (existing.checkIn && existing.checkOut === '-') {
+                statusEl.innerHTML = `<span class="text-emerald-600 font-semibold">Sudah Check In (${existing.checkIn})</span>`;
+            } else {
+                statusEl.innerHTML = `<span class="text-slate-700 font-semibold">Selesai (In: ${existing.checkIn} | Out: ${existing.checkOut})</span>`;
+            }
+        }
+
+        // Leave Submission
+        function handleLeaveSubmission(e) {
+            e.preventDefault();
+            const start = document.getElementById('leave-start').value;
+            const end = document.getElementById('leave-end').value;
+            const reason = document.getElementById('leave-reason').value;
+
+            const newLeave = {
+                id: Date.now(),
+                username: currentUser.username,
+                name: currentUser.name,
+                role: currentUser.role,
+                startDate: start,
+                endDate: end,
+                reason: reason,
+                status: 'Sedang ditinjau Pusat',
+                submittedDate: new Date().toISOString().split('T')[0]
+            };
+
+            leaveRequests.push(newLeave);
+            saveAppData();
+            showToast('Permohonan cuti berhasil diajukan ke Pusat!');
+            renderDashboard();
+        }
+
+        // Performance Report Upload (SPV & Manager)
+        function handleUploadReport(e) {
+            e.preventDefault();
+            const title = document.getElementById('report-title-input').value;
+            const desc = document.getElementById('report-desc-input').value;
+            const fileInput = document.getElementById('report-image-input');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showToast('Harap unggah foto bukti laporan!', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const newReport = {
+                    id: Date.now(),
+                    username: currentUser.username,
+                    name: currentUser.name,
+                    role: currentUser.role,
+                    title: title,
+                    description: desc,
+                    image: evt.target.result,
+                    status: 'Sedang ditinjau Pusat',
+                    submittedDate: new Date().toISOString().split('T')[0]
+                };
+
+                performanceReports.push(newReport);
+                saveAppData();
+                showToast('Laporan kinerja berhasil dikirim ke Pusat!');
+                renderDashboard();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Pusat Control Panel Tabs & Handlers
+        function switchPusatTab(tabName) {
+            document.querySelectorAll('.pusat-tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.pusat-tab-btn').forEach(btn => {
+                btn.classList.remove('bg-nova-600', 'text-white', 'shadow');
+                btn.classList.add('bg-slate-100', 'text-slate-600', 'hover:bg-slate-200');
+            });
+
+            document.getElementById(`pusat-${tabName}-content`).classLis
